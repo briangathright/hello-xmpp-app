@@ -1,6 +1,0 @@
-<root>
-    <item name='org.jivesoftware.smack.filter.MessageTypeFilter'>
-        <annotation name='java.lang.annotation.Deprecated'/>
-        <annotation name='org.jetbrains.annotations.Nullable'/>
-    </item>
-</root>
