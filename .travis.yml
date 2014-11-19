@@ -1,0 +1,2 @@
+language: scala
+before_install: ./install-prereqs.sh
