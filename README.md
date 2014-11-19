@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/briangathright/hello-xmpp-app.svg?branch=master)](https://travis-ci.org/briangathright/hello-xmpp-app)
 # hello-xmpp-scala 
 
 Scala implementation using Smack 4.1 on Android. Allow devices to talk to each other.
