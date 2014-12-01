@@ -116,7 +116,7 @@ class MainActivity extends Activity with TypedActivity {
         override def chatCreated(chat: Chat, createdLocally: Boolean) = {
           if (chat2 == null) chat2 = chat
           if (!createdLocally) {
-            val from: String = chat2.getParticipant
+            val from = chat2.getParticipant
             chat2.addMessageListener(new ChatMessageListener {
               override def processMessage(chat: Chat, message: Message) = {
                 if (message.getBody != null) {
@@ -142,7 +142,7 @@ class MainActivity extends Activity with TypedActivity {
       chat2 = chatmanager.createChat(to, new ChatMessageListener {
         override def processMessage(chat: Chat, message: Message) = {
           if (message.getBody != null) {
-            val from: String = chat.getParticipant
+            val from = chat.getParticipant
             runOnUiThread {
               messages.add(from + ": " + message.getBody)
               setListAdapter()
