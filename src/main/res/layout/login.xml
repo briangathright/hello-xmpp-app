@@ -71,5 +71,10 @@
                 android:text="Login"
                 android:textStyle="bold"
                 android:onClick="onLogin"/>
+        <CheckBox
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Host"
+                android:id="@+id/hostCheckBox"/>
     </LinearLayout>
 </LinearLayout>

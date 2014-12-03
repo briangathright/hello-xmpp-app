@@ -12,7 +12,7 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.{AbstractXMPPConnection, ConnectionConfiguration}
 import org.jivesoftware.smack._
-import org.jivesoftware.smackx.muc.{RoomInfo, MultiUserChat, MultiUserChatManager}
+import org.jivesoftware.smackx.muc.{InvitationListener, RoomInfo, MultiUserChat, MultiUserChatManager}
 import org.jivesoftware.smackx.xdata.Form
 
 /**
@@ -29,6 +29,7 @@ class MainActivity extends Activity with TypedActivity {
 
   var username: String = _
   var password: String = _
+  var isHost: Boolean = _
 
   private var chatmanager: ChatManager = _
   private var mucmanager: MultiUserChatManager = _
@@ -43,6 +44,7 @@ class MainActivity extends Activity with TypedActivity {
 
   private def usernameET = findView(TR.usernameET)
   private def passwordET = findView(TR.passwordET)
+  private def checkBox = findView(TR.hostCheckBox)
   private def recipient = findView(TR.recipientET)
   private def send = findView(TR.sendButton)
   private def textMessage = findView(TR.chatBoxET)
@@ -64,6 +66,7 @@ class MainActivity extends Activity with TypedActivity {
   def onLogin(view: View): Unit = {
     username = usernameET.getText.toString
     password = passwordET.getText.toString
+    isHost = checkBox.isChecked
     Log.d(TAG, "user = " + username + ", pw = " + password)
     connect()
     setContentView(R.layout.main)
@@ -96,24 +99,43 @@ class MainActivity extends Activity with TypedActivity {
     Log.d(TAG, "getting MultiUserChatManager")
     mucmanager = MultiUserChatManager.getInstanceFor(connection)
     Log.d(TAG, "got MultiUserChatManager")
-    val uid: UUID = UUID.randomUUID
-    val chatRoomName = String.format("private-chat-%1s@%2s", uid, "groupchat.google.com")
-    //val chatRoomName: String = "lucawall@groupchat.google.com"
-    muc = mucmanager.getMultiUserChat(chatRoomName)
-    Log.d(TAG, "Rooms joined: " + mucmanager.getJoinedRooms.toString)
-    try {
-      muc.join("testbot")
-      Log.d(TAG, "Creating MultiUserChat room with name: " + chatRoomName)
-      muc.sendConfigurationForm(new Form(Form.TYPE_SUBMIT))
-    } catch {
-      case ex: SmackException =>
-        Log.e(TAG, ex.toString)
+    if(isHost) {
+      Log.d(TAG, username + " is hosting a multiuserchat")
+      val uid: UUID = UUID.randomUUID
+      val chatRoomName = String.format("private-chat-%1s@%2s", uid, "groupchat.google.com")
+      //val chatRoomName: String = "lucawall@groupchat.google.com"
+      muc = mucmanager.getMultiUserChat(chatRoomName)
+      try {
+        muc.join("testbot")
+        Log.d(TAG, "Creating MultiUserChat room with name: " + chatRoomName)
+        muc.sendConfigurationForm(new Form(Form.TYPE_SUBMIT))
+      } catch {
+        case ex: SmackException =>
+          Log.e(TAG, ex.toString)
+      }
+      Log.d(TAG, "Occupants in room: " + muc.getOccupants.toString)
+      Log.d(TAG, "Occupant count: " + muc.getOccupantsCount.toString)
+
+      //muc.grantMembership("briangathright@gmail.com")
+      muc.invite("briangathright@gmail.com", "come join the room")
+
+      muc.leave()
+      muc.destroy("done...", "none")
+
+      Log.d(TAG, "Destroyed Room")
+
     }
-    Log.d(TAG, "Occupants in room: " + muc.getOccupants.toString)
-    Log.d(TAG, "Occupant count: " + muc.getOccupantsCount.toString)
-    muc.leave()
-    muc.destroy("done...", "none")
-    Log.d(TAG, "Destroyed Room")
+
+
+    else{
+      Log.d(TAG, username + " is waiting to join a multiuserchat")
+      mucmanager.addInvitationListener(new InvitationListener {
+        override def invitationReceived(conn: XMPPConnection, room: String, inviter: String, reason: String, password: String, message: Message): Unit = {
+          muc = mucmanager.getMultiUserChat(room)
+          muc.join("testbot2", password)
+        }
+      })
+    }
   }
 
   def connect(): Unit = {
