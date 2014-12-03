@@ -1,7 +1,7 @@
 package edu.luc.etl.cs313.scala.hello.xmpp
 package ui
 
-import java.util.ArrayList
+import java.util.{UUID, ArrayList}
 
 import android.widget.ArrayAdapter
 import android.app.Activity
@@ -12,6 +12,8 @@ import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.{AbstractXMPPConnection, ConnectionConfiguration}
 import org.jivesoftware.smack._
+import org.jivesoftware.smackx.muc.{RoomInfo, MultiUserChat, MultiUserChatManager}
+import org.jivesoftware.smackx.xdata.Form
 
 /**
  * The main Android activity, which provides the required lifecycle methods.
@@ -29,8 +31,11 @@ class MainActivity extends Activity with TypedActivity {
   var password: String = _
 
   private var chatmanager: ChatManager = _
+  private var mucmanager: MultiUserChatManager = _
+  var muc: MultiUserChat = _
   var chat2: Chat = _
   var connection: AbstractXMPPConnection = _
+
 
   private val messages = new ArrayList[String]
 
@@ -87,6 +92,30 @@ class MainActivity extends Activity with TypedActivity {
     }
   }
 
+  def createMUC(): Unit = {
+    Log.d(TAG, "getting MultiUserChatManager")
+    mucmanager = MultiUserChatManager.getInstanceFor(connection)
+    Log.d(TAG, "got MultiUserChatManager")
+    val uid: UUID = UUID.randomUUID
+    val chatRoomName = String.format("private-chat-%1s@%2s", uid, "groupchat.google.com")
+    //val chatRoomName: String = "lucawall@groupchat.google.com"
+    muc = mucmanager.getMultiUserChat(chatRoomName)
+    Log.d(TAG, "Rooms joined: " + mucmanager.getJoinedRooms.toString)
+    try {
+      muc.join("testbot")
+      Log.d(TAG, "Creating MultiUserChat room with name: " + chatRoomName)
+      muc.sendConfigurationForm(new Form(Form.TYPE_SUBMIT))
+    } catch {
+      case ex: SmackException =>
+        Log.e(TAG, ex.toString)
+    }
+    Log.d(TAG, "Occupants in room: " + muc.getOccupants.toString)
+    Log.d(TAG, "Occupant count: " + muc.getOccupantsCount.toString)
+    muc.leave()
+    muc.destroy("done...", "none")
+    Log.d(TAG, "Destroyed Room")
+  }
+
   def connect(): Unit = {
     runOnBackgroundThread {
       Log.d(TAG, "Getting config...")
@@ -131,6 +160,8 @@ class MainActivity extends Activity with TypedActivity {
         }
       })
       Log.d(TAG, "attached chat listener")
+
+      createMUC()
     }
   }
 
