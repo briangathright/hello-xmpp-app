@@ -3,18 +3,15 @@ package ui
 
 import java.util.ArrayList
 
-import _root_.android.widget.ArrayAdapter
+import android.widget.ArrayAdapter
 import android.app.Activity
-import android.os.Bundle
+import android.os.{AsyncTask, Bundle}
 import android.util.Log
 import android.view.View
 import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jivesoftware.smack.{AbstractXMPPConnection, ConnectionConfiguration}
 import org.jivesoftware.smack._
-
-import scala.concurrent._
-import ExecutionContext.Implicits.global
 
 /**
  * The main Android activity, which provides the required lifecycle methods.
@@ -47,19 +44,19 @@ class MainActivity extends Activity with TypedActivity {
   private def listview = findView(TR.listMessages)
 
 
-  override def onCreate(savedInstanceState: Bundle) {
+  override def onCreate(savedInstanceState: Bundle) = {
     super.onCreate(savedInstanceState)
     Log.d(TAG, "onCreate")
     // inject the (implicit) dependency on the view
     setContentView(R.layout.login)
   }
 
-  override def onStart() {
+  override def onStart() = {
     super.onStart()
     Log.d(TAG, "onStart")
   }
 
-  def onLogin(view: View) {
+  def onLogin(view: View): Unit = {
     username = usernameET.getText.toString
     password = passwordET.getText.toString
     Log.d(TAG, "user = " + username + ", pw = " + password)
@@ -68,24 +65,30 @@ class MainActivity extends Activity with TypedActivity {
     setListAdapter()
   }
 
-  private def setListAdapter() {
-    val adapter: ArrayAdapter[String] = new ArrayAdapter[String](this, R.layout.listitem, messages)
+  private def setListAdapter(): Unit = {
+    val adapter = new ArrayAdapter[String](this, R.layout.listitem, messages)
     listview.setAdapter(adapter)
   }
 
-  override def onDestroy() {
+  private def runOnBackgroundThread(task: => Unit): Unit =
+    AsyncTask.execute(new Runnable {
+      override def run() = task
+    })
+
+  private def runOnUiThread(task: => Unit): Unit =
+    runOnUiThread(new Runnable {
+      override def run() = task
+    })
+
+  override def onDestroy() = {
     super.onDestroy()
-    future {
-      try {
-        connection.disconnect()
-      } catch {
-        case e: SmackException => e.printStackTrace()
-      }
+    runOnBackgroundThread {
+      connection.disconnect()
     }
   }
 
-  def connect() {
-    future {
+  def connect(): Unit = {
+    runOnBackgroundThread {
       Log.d(TAG, "Getting config...")
       val connConfig = new ConnectionConfiguration(HOST, PORT, SERVICE)
       Log.d(TAG, "Getting conn...")
@@ -98,8 +101,6 @@ class MainActivity extends Activity with TypedActivity {
         case ex: XMPPException =>
           Log.e(TAG, "Failed to connect to " + connection.getHost)
           Log.e(TAG, ex.toString)
-        case e: SmackException =>
-          e.printStackTrace()
       }
       try {
         connection.login(username, password)
@@ -108,10 +109,6 @@ class MainActivity extends Activity with TypedActivity {
         case ex: XMPPException =>
           Log.e(TAG, "Failed to log in as " + username)
           Log.e(TAG, ex.toString)
-        case e: SmackException.NotConnectedException =>
-          e.printStackTrace()
-        case e: SmackException =>
-          e.printStackTrace()
       }
       chatmanager = ChatManager.getInstanceFor(connection)
       Log.d(TAG, "got chat manager")
@@ -119,16 +116,14 @@ class MainActivity extends Activity with TypedActivity {
         override def chatCreated(chat: Chat, createdLocally: Boolean) = {
           if (chat2 == null) chat2 = chat
           if (!createdLocally) {
-            val from: String = chat2.getParticipant
+            val from = chat2.getParticipant
             chat2.addMessageListener(new ChatMessageListener {
               override def processMessage(chat: Chat, message: Message) = {
                 if (message.getBody != null) {
-                  runOnUiThread(new Runnable {
-                    override def run() = {
-                      messages.add(from + ": " + message.getBody)
-                      setListAdapter()
-                    }
-                  })
+                  runOnUiThread {
+                    messages.add(from + ": " + message.getBody)
+                    setListAdapter()
+                  }
                 }
               }
             })
@@ -139,7 +134,7 @@ class MainActivity extends Activity with TypedActivity {
     }
   }
 
-  def onSend(view: View) {
+  def onSend(view: View): Unit = {
     val to = recipient.getText.toString
     val text = textMessage.getText.toString
     Log.d(TAG, "Sending text " + text + " to " + to)
@@ -147,13 +142,11 @@ class MainActivity extends Activity with TypedActivity {
       chat2 = chatmanager.createChat(to, new ChatMessageListener {
         override def processMessage(chat: Chat, message: Message) = {
           if (message.getBody != null) {
-            val from: String = chat.getParticipant
-            runOnUiThread(new Runnable {
-              override def run(): Unit = {
-                messages.add(from + ": " + message.getBody)
-                setListAdapter()
-              }
-            })
+            val from = chat.getParticipant
+            runOnUiThread {
+              messages.add(from + ": " + message.getBody)
+              setListAdapter()
+            }
           }
         }
       })
@@ -161,17 +154,10 @@ class MainActivity extends Activity with TypedActivity {
     val msg = new Message(to, Message.Type.chat)
     msg.setBody(text)
     if (connection != null) {
-      try {
-        connection.sendPacket(msg)
-        messages.add("You: " + text)
-        setListAdapter()
-      } catch {
-        case e: SmackException.NotConnectedException => {
-          e.printStackTrace()
-        }
-      }
+      connection.sendPacket(msg)
+      messages.add("You: " + text)
+      setListAdapter()
     }
     textMessage.setText("")
   }
 }
-
