@@ -9,7 +9,7 @@ import android.os.{AsyncTask, Bundle}
 import android.util.Log
 import android.view.View
 import org.jivesoftware.smack.packet.Message
-import org.jivesoftware.smack.tcp.XMPPTCPConnection
+import org.jivesoftware.smack.tcp.{XMPPTCPConnectionConfiguration, XMPPTCPConnection}
 import org.jivesoftware.smack.{AbstractXMPPConnection, ConnectionConfiguration}
 import org.jivesoftware.smack._
 import org.jivesoftware.smackx.muc.{InvitationListener, RoomInfo, MultiUserChat, MultiUserChatManager}
@@ -141,9 +141,13 @@ class MainActivity extends Activity with TypedActivity {
   def connect(): Unit = {
     runOnBackgroundThread {
       Log.d(TAG, "Getting config...")
-      val connConfig = new ConnectionConfiguration(HOST, PORT, SERVICE)
+      val configBuilder = XMPPTCPConnectionConfiguration.builder()
+      configBuilder.setUsernameAndPassword(username, password)
+      configBuilder.setHost(HOST)
+      configBuilder.setPort(PORT)
+      configBuilder.setServiceName(SERVICE)
       Log.d(TAG, "Getting conn...")
-      connection = new XMPPTCPConnection(connConfig)
+      connection = new XMPPTCPConnection(configBuilder.build())
       try {
         Log.d(TAG, "Connectings...")
         connection.connect()
@@ -154,7 +158,7 @@ class MainActivity extends Activity with TypedActivity {
           Log.e(TAG, ex.toString)
       }
       try {
-        connection.login(username, password)
+        connection.login()
         Log.d(TAG, "logged in successfully")
       } catch {
         case ex: XMPPException =>
