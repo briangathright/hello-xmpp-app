@@ -14,6 +14,7 @@ import org.jivesoftware.smack.{AbstractXMPPConnection, ConnectionConfiguration}
 import org.jivesoftware.smack._
 import org.jivesoftware.smackx.muc.{InvitationListener, RoomInfo, MultiUserChat, MultiUserChatManager}
 import org.jivesoftware.smackx.xdata.Form
+import org.jxmpp.util.XmppStringUtils
 
 /**
  * The main Android activity, which provides the required lifecycle methods.
@@ -29,26 +30,43 @@ class MainActivity extends Activity with TypedActivity {
 
   var username: String = _
   var password: String = _
+  var isMUC: Boolean = _
   var isHost: Boolean = _
 
+  var nickname: String = _
   private var chatmanager: ChatManager = _
   private var mucmanager: MultiUserChatManager = _
+
   var muc: MultiUserChat = _
   var chat2: Chat = _
   var connection: AbstractXMPPConnection = _
 
-
   private val messages = new ArrayList[String]
-
   private val TAG = "xmpp-android-activity" // FIXME please use this in all log messages
 
   private def usernameET = findView(TR.usernameET)
+
   private def passwordET = findView(TR.passwordET)
+
   private def checkBox = findView(TR.hostCheckBox)
+
+  private def mucCheckBox = findView(TR.mucCheckBox)
+
   private def recipient = findView(TR.recipientET)
+
+  private def inviteET = findView(TR.inviteET)
+
   private def send = findView(TR.sendButton)
+
+  private def mucSend = findView(TR.mucSendButton)
+
   private def textMessage = findView(TR.chatBoxET)
+
   private def listview = findView(TR.listMessages)
+
+  private def mucTextMessage = findView(TR.mucChatBoxET)
+
+  private def mucListview = findView(TR.mucListMessages)
 
 
   override def onCreate(savedInstanceState: Bundle) = {
@@ -67,15 +85,28 @@ class MainActivity extends Activity with TypedActivity {
     username = usernameET.getText.toString
     password = passwordET.getText.toString
     isHost = checkBox.isChecked
+    isMUC = mucCheckBox.isChecked
     Log.d(TAG, "user = " + username + ", pw = " + password)
     connect()
-    setContentView(R.layout.main)
+
+    if (isMUC) {
+      setContentView(R.layout.muc)
+    }
+    else {
+      setContentView(R.layout.main)
+    }
+
     setListAdapter()
   }
 
   private def setListAdapter(): Unit = {
     val adapter = new ArrayAdapter[String](this, R.layout.listitem, messages)
-    listview.setAdapter(adapter)
+    if (isMUC) {
+      mucListview.setAdapter(adapter)
+    }
+    else {
+      listview.setAdapter(adapter)
+    }
   }
 
   private def runOnBackgroundThread(task: => Unit): Unit =
@@ -99,44 +130,64 @@ class MainActivity extends Activity with TypedActivity {
     Log.d(TAG, "getting MultiUserChatManager")
     mucmanager = MultiUserChatManager.getInstanceFor(connection)
     Log.d(TAG, "got MultiUserChatManager")
-    if(isHost) {
+    if (isHost) {
       Log.d(TAG, username + " is hosting a multiuserchat")
       val uid: UUID = UUID.randomUUID
       val chatRoomName = String.format("private-chat-%1s@%2s", uid, "groupchat.google.com")
       //val chatRoomName: String = "lucawall@groupchat.google.com"
       muc = mucmanager.getMultiUserChat(chatRoomName)
       try {
-        muc.join("testbot")
+        muc.join(username)
         Log.d(TAG, "Creating MultiUserChat room with name: " + chatRoomName)
         muc.sendConfigurationForm(new Form(Form.TYPE_SUBMIT))
       } catch {
         case ex: SmackException =>
           Log.e(TAG, ex.toString)
       }
-      Log.d(TAG, "Occupants in room: " + muc.getOccupants.toString)
-      Log.d(TAG, "Occupant count: " + muc.getOccupantsCount.toString)
-
-      //muc.grantMembership("briangathright@gmail.com")
-      muc.invite("briangathright@gmail.com", "come join the room")
-
-      muc.leave()
-      muc.destroy("done...", "none")
-
-      Log.d(TAG, "Destroyed Room")
-
+      muc.addMessageListener(new MessageListener {
+        override def processMessage(message: Message): Unit = {
+          if (message.getBody != null) {
+            val from = XmppStringUtils.parseResource(message.getFrom)
+            runOnUiThread {
+              if (from.equals(username)) {
+                messages.add("You: " + message.getBody)
+              }
+              else {
+                messages.add(from + ": " + message.getBody)
+              }
+              setListAdapter()
+            }
+          }
+        }
+      })
     }
-
-
-    else{
+    else {
       Log.d(TAG, username + " is waiting to join a multiuserchat")
       mucmanager.addInvitationListener(new InvitationListener {
         override def invitationReceived(conn: XMPPConnection, room: String, inviter: String, reason: String, password: String, message: Message): Unit = {
           muc = mucmanager.getMultiUserChat(room)
-          muc.join("testbot2", password)
+          muc.join(username, password)
+          muc.addMessageListener(new MessageListener {
+            override def processMessage(message: Message): Unit = {
+              if (message.getBody != null) {
+                val from = XmppStringUtils.parseResource(message.getFrom)
+                runOnUiThread {
+                  if (from.equals(username)) {
+                    messages.add("You: " + message.getBody)
+                  }
+                  else {
+                    messages.add(from + ": " + message.getBody)
+                  }
+                  setListAdapter()
+                }
+              }
+            }
+          })
         }
       })
     }
   }
+
 
   def connect(): Unit = {
     runOnBackgroundThread {
@@ -217,4 +268,28 @@ class MainActivity extends Activity with TypedActivity {
     }
     textMessage.setText("")
   }
+
+
+  def onSendMUC(view: View): Unit = {
+    val text = mucTextMessage.getText.toString
+    if (text.equals("exit") && isHost) {
+      muc.leave()
+      muc.destroy("done...", "none")
+      Log.d(TAG, "Destroyed Room")
+    }
+    else {
+      Log.d(TAG, "Sending text " + text)
+      setListAdapter()
+      muc.sendMessage(text)
+      mucTextMessage.setText("")
+    }
+  }
+
+  def onInviteMUC(view: View): Unit = {
+    val invitee = inviteET.getText.toString
+    Log.d(TAG, "Inviting " + invitee + " to the room")
+    muc.invite(invitee, "come join me in this room")
+    inviteET.setText("")
+  }
 }
+
